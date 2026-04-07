@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
-
+from decimal import Decimal
+from django.conf import settings
+from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 class UserManager(BaseUserManager):
     def create_user(self, email, name, role, university, password=None, **extra_fields):
@@ -170,3 +173,78 @@ class TutoringSession(models.Model):
 
     def __str__(self):
         return f"Session #{self.id} - {self.request.course_key} - {self.status}"
+
+
+class Payment(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("held", "Held"),
+        ("released", "Released"),
+        ("refunded", "Refunded"),
+    ]
+
+    session = models.OneToOneField(
+        "TutoringSession",
+        on_delete=models.CASCADE,
+        related_name="payment"
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payments_made"
+    )
+    tutor = models.ForeignKey(
+        "TutorProfile",
+        on_delete=models.CASCADE,
+        related_name="payments_received"
+    )
+    hourly_rate = models.DecimalField(max_digits=8, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def calculate_total(self):
+        if self.session.duration_minutes:
+            hours = Decimal(str(self.session.duration_minutes)) / Decimal("60")
+            return self.hourly_rate * hours
+        return Decimal("0.00")
+
+    def save(self, *args, **kwargs):
+        self.student = self.session.student
+        self.tutor = self.session.tutor
+        self.total_amount = self.calculate_total()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Payment #{self.id} - Session {self.session.id}"
+
+
+class Review(models.Model):
+    session = models.OneToOneField(
+        "TutoringSession",
+        on_delete=models.CASCADE,
+        related_name="review"
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reviews_given"
+    )
+    tutor = models.ForeignKey(
+        "TutorProfile",
+        on_delete=models.CASCADE,
+        related_name="reviews_received"
+    )
+    rating = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        self.student = self.session.student
+        self.tutor = self.session.tutor
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Review #{self.id} - Session {self.session.id}"

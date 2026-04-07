@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, TutorProfile, SessionRequest, TutoringSession
+from .models import User, TutorProfile, SessionRequest, TutoringSession, Payment, Review
 
 
 @admin.register(User)
@@ -48,6 +48,7 @@ class SessionRequestAdmin(admin.ModelAdmin):
     list_filter = ('status', 'mode', 'university')
     search_fields = ('student__email', 'student__name', 'course_key')
 
+
 @admin.register(TutoringSession)
 class TutoringSessionAdmin(admin.ModelAdmin):
     list_display = (
@@ -63,4 +64,57 @@ class TutoringSessionAdmin(admin.ModelAdmin):
         'created_at',
     )
     list_filter = ('status', 'mode')
-    search_fields = ('student__email', 'student__name', 'tutor__user__email', 'request__course_key')
+    search_fields = (
+        'student__email',
+        'student__name',
+        'tutor__user__email',
+        'tutor__user__name',
+        'request__course_key',
+    )
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    def duration(self, obj):
+        return obj.session.duration_minutes
+
+    duration.short_description = "Duration (min)"
+
+    list_display = (
+        'id',
+        'session',
+        'student',
+        'tutor',
+        'duration',
+        'hourly_rate',
+        'total_amount',
+        'status',
+        'created_at',
+    )
+    list_filter = ('status', 'created_at')
+    search_fields = (
+        'student__email',
+        'student__name',
+        'tutor__user__email',
+        'tutor__user__name',
+        'session__id',
+    )
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'session',
+        'student',
+        'tutor',
+        'rating',
+        'created_at',
+    )
+    list_filter = ('rating', 'created_at')
+    search_fields = (
+        'student__email',
+        'student__name',
+        'tutor__user__email',
+        'tutor__user__name',
+        'comment',
+    )

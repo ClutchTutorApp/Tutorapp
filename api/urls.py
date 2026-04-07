@@ -9,6 +9,13 @@ from .views import (
     TutoringSessionListView,
     CreateTutoringSessionView,
     TutoringSessionDetailView,
+    PaymentListView,
+    PaymentCreateView,
+    PaymentDetailView,
+    PaymentUpdateView,
+    ReviewListView,
+    ReviewCreateView,
+    ReviewDetailView,
 )
 
 urlpatterns = [
@@ -21,4 +28,11 @@ urlpatterns = [
     path('sessions/', TutoringSessionListView.as_view(), name='tutoring_sessions'),
     path('sessions/create/', CreateTutoringSessionView.as_view(), name='create_tutoring_session'),
     path('sessions/<int:session_id>/', TutoringSessionDetailView.as_view(), name='tutoring_session_detail'),
+    path("payments/", PaymentListView.as_view(), name="payments-list"),
+    path("payments/create/", PaymentCreateView.as_view(), name="payments-create"),
+    path("payments/<int:payment_id>/", PaymentDetailView.as_view(), name="payments-detail"),
+    path("payments/<int:payment_id>/update/", PaymentUpdateView.as_view(), name="payments-update"),
+    path("reviews/", ReviewListView.as_view(), name="reviews-list"),
+    path("reviews/create/", ReviewCreateView.as_view(), name="reviews-create"),
+    path("reviews/<int:review_id>/", ReviewDetailView.as_view(), name="reviews-detail"),
 ]

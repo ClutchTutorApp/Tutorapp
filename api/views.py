@@ -1,11 +1,11 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, permissions
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
 
-from .models import TutorProfile, SessionRequest, TutoringSession
+from .models import TutorProfile, SessionRequest, TutoringSession, Payment, Review
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -14,6 +14,10 @@ from .serializers import (
     SessionRequestSerializer,
     TutoringSessionSerializer,
     CreateTutoringSessionSerializer,
+    PaymentSerializer,
+    CreatePaymentSerializer,
+    ReviewSerializer,
+    CreateReviewSerializer,
 )
 
 
@@ -246,3 +250,61 @@ class TutoringSessionDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class PaymentListView(generics.ListAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Payment.objects.filter(student=user) | Payment.objects.filter(tutor=user)
+
+
+class PaymentCreateView(generics.CreateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = CreatePaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PaymentDetailView(generics.RetrieveAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = "payment_id"
+
+
+class PaymentUpdateView(generics.UpdateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = "payment_id"
+    http_method_names = ["patch"]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Payment.objects.filter(tutor=user)
+
+
+class ReviewListView(generics.ListAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Review.objects.filter(student=user) | Review.objects.filter(tutor__user=user)
+
+class ReviewCreateView(generics.CreateAPIView):
+    queryset = Review.objects.all()
+    serializer_class = CreateReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+class ReviewDetailView(generics.RetrieveAPIView):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = "review_id"

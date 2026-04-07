@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, TutorProfile, SessionRequest, TutoringSession
+from .models import User, TutorProfile, SessionRequest, TutoringSession, Payment, Review
 from django.contrib.auth import authenticate
 
 
@@ -232,4 +232,71 @@ class CreateTutoringSessionSerializer(serializers.Serializer):
             raise serializers.ValidationError({"request_id": "A tutoring session already exists for this request."})
 
         attrs['session_request'] = session_request
+        return attrs
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "session",
+            "student",
+            "tutor",
+            "hourly_rate",
+            "total_amount",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["student", "tutor", "total_amount", "created_at"]
+
+
+class CreatePaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ["session", "hourly_rate", "status"]
+
+    def validate(self, attrs):
+        session = attrs["session"]
+
+        if hasattr(session, "payment"):
+            raise serializers.ValidationError("This session already has a payment.")
+
+        if not session.duration_minutes:
+            raise serializers.ValidationError("Session duration must be set before creating payment.")
+
+        return attrs
+
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = [
+            "id",
+            "session",
+            "student",
+            "tutor",
+            "rating",
+            "comment",
+            "created_at",
+        ]
+        read_only_fields = ["student", "tutor", "created_at"]
+
+class CreateReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ["session", "rating", "comment"]
+
+    def validate(self, attrs):
+        session = attrs["session"]
+        request = self.context["request"]
+
+        if hasattr(session, "review"):
+            raise serializers.ValidationError("This session already has a review.")
+
+        if request.user != session.student:
+            raise serializers.ValidationError("Only the student can leave a review.")
+
+        if session.status not in ["ended", "completed"]:
+            raise serializers.ValidationError("You can only review a finished session.")
+
         return attrs
