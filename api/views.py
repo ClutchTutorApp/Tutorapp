@@ -5,11 +5,13 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
 
-from .models import TutorProfile, SessionRequest, TutoringSession, Payment, Review
+from .models import University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
     UserProfileSerializer,
+    UniversitySerializer,
+    CourseSerializer,
     TutorProfileSerializer,
     SessionRequestSerializer,
     TutoringSessionSerializer,
@@ -19,6 +21,32 @@ from .serializers import (
     ReviewSerializer,
     CreateReviewSerializer,
 )
+
+
+class UniversityListView(generics.ListAPIView):
+    queryset = University.objects.all().order_by('code')
+    serializer_class = UniversitySerializer
+    permission_classes = [AllowAny]
+
+
+class CourseListView(generics.ListAPIView):
+    serializer_class = CourseSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Course.objects.select_related('university').order_by(
+            'university__code',
+            'prefix',
+            'number'
+        )
+        university_code = self.request.query_params.get('university')
+
+        if university_code:
+            queryset = queryset.filter(
+                university__code=University.normalize_code(university_code)
+            )
+
+        return queryset
 
 
 class RegisterView(generics.CreateAPIView):
@@ -107,6 +135,20 @@ class TutorProfileView(APIView):
 class SessionRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def find_matching_tutor(self, session_request):
+        return (
+            TutorProfile.objects
+            .select_related('user')
+            .filter(
+                courses_can_teach=session_request.course,
+                is_approved=True,
+                user__role='tutor',
+            )
+            .exclude(user=session_request.student)
+            .order_by('-is_online', '-rating', 'created_at')
+            .first()
+        )
+
     def get(self, request):
         if request.user.role != 'student':
             return Response(
@@ -130,6 +172,13 @@ class SessionRequestView(APIView):
 
         if serializer.is_valid():
             session_request = serializer.save(student=request.user)
+            matched_tutor = self.find_matching_tutor(session_request)
+
+            if matched_tutor:
+                session_request.matched_tutor = matched_tutor
+                session_request.status = 'matched'
+                session_request.save(update_fields=['matched_tutor', 'status'])
+
             return Response(
                 SessionRequestSerializer(session_request).data,
                 status=status.HTTP_201_CREATED

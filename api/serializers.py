@@ -1,9 +1,120 @@
 from rest_framework import serializers
-from .models import User, TutorProfile, SessionRequest, TutoringSession, Payment, Review
+from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
 from django.contrib.auth import authenticate
 
 
+class UniversityCodeField(serializers.SlugRelatedField):
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = University.normalize_code(data)
+        return super().to_internal_value(data)
+
+
+def split_course_code(course_code):
+    compact = ''.join(str(course_code).upper().split())
+    prefix_chars = []
+    number_chars = []
+    found_number = False
+
+    for char in compact:
+        if not found_number and char.isalpha():
+            prefix_chars.append(char)
+        else:
+            found_number = True
+            number_chars.append(char)
+
+    prefix = ''.join(prefix_chars)
+    number = ''.join(number_chars)
+
+    if not prefix or not number:
+        raise serializers.ValidationError("Course code must look like COP4655.")
+
+    return prefix, number
+
+
+def get_or_create_course(university_code, prefix, number):
+    code = University.normalize_code(university_code)
+    prefix = str(prefix).upper().strip()
+    number = str(number).strip()
+
+    if not prefix or not number:
+        raise serializers.ValidationError("Course prefix and number are required.")
+
+    if len(prefix) > 10:
+        raise serializers.ValidationError({"course_prefix": "Course prefix must be 10 characters or fewer."})
+
+    if len(number) > 10:
+        raise serializers.ValidationError({"course_number": "Course number must be 10 characters or fewer."})
+
+    try:
+        university = University.objects.get(code=code)
+    except University.DoesNotExist:
+        raise serializers.ValidationError({"university": "Unknown university code."})
+
+    course, _ = Course.objects.get_or_create(
+        university=university,
+        prefix=prefix,
+        number=number,
+    )
+    return course
+
+
+class UniversitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = University
+        fields = ['id', 'name', 'code', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    university = UniversityCodeField(slug_field='code', queryset=University.objects.all())
+    course_key = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Course
+        fields = ['id', 'university', 'prefix', 'number', 'course_key', 'created_at']
+        read_only_fields = ['id', 'course_key', 'created_at']
+
+
+class CourseReferenceField(serializers.PrimaryKeyRelatedField):
+    def use_pk_only_optimization(self):
+        return False
+
+    def to_representation(self, value):
+        return CourseSerializer(value).data
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            course_id = data.get('id') or data.get('pk')
+            if course_id:
+                return super().to_internal_value(course_id)
+
+            university = data.get('university') or data.get('university_code')
+            prefix = data.get('prefix') or data.get('course_prefix')
+            number = data.get('number') or data.get('course_number')
+
+            if not all([university, prefix, number]):
+                raise serializers.ValidationError(
+                    "Course objects must include university, prefix, and number."
+                )
+
+            return get_or_create_course(university, prefix, number)
+
+        if isinstance(data, str):
+            value = data.strip()
+            if ':' in value:
+                university, course_code = value.split(':', 1)
+                prefix, number = split_course_code(course_code)
+                return get_or_create_course(university, prefix, number)
+
+            if value.isdigit():
+                return super().to_internal_value(value)
+
+        return super().to_internal_value(data)
+
+
 class RegisterSerializer(serializers.ModelSerializer):
+    university = UniversityCodeField(slug_field='code', queryset=University.objects.all())
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
 
@@ -50,6 +161,8 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    university = UniversityCodeField(slug_field='code', read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -66,7 +179,12 @@ class TutorProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.ReadOnlyField(source='user.id')
     name = serializers.ReadOnlyField(source='user.name')
     email = serializers.ReadOnlyField(source='user.email')
-    university = serializers.ReadOnlyField(source='user.university')
+    university = UniversityCodeField(source='user.university', slug_field='code', read_only=True)
+    courses_can_teach = CourseReferenceField(
+        many=True,
+        queryset=Course.objects.select_related('university').all(),
+        required=False
+    )
 
     class Meta:
         model = TutorProfile
@@ -98,14 +216,6 @@ class TutorProfileSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
-    def validate_courses_can_teach(self, value):
-        if not isinstance(value, list):
-            raise serializers.ValidationError("courses_can_teach must be a list.")
-        for item in value:
-            if not isinstance(item, str):
-                raise serializers.ValidationError("Each course must be a string.")
-        return value
-
     def validate_general_topics(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError("general_topics must be a list.")
@@ -117,11 +227,16 @@ class TutorProfileSerializer(serializers.ModelSerializer):
 class SessionRequestSerializer(serializers.ModelSerializer):
     student_id = serializers.ReadOnlyField(source='student.id')
     student_name = serializers.ReadOnlyField(source='student.name')
+    course = CourseReferenceField(
+        queryset=Course.objects.select_related('university').all(),
+        required=False
+    )
+    university = serializers.CharField(required=False)
+    course_prefix = serializers.CharField(required=False)
+    course_number = serializers.CharField(required=False)
     course_key = serializers.ReadOnlyField()
     matched_tutor_id = serializers.ReadOnlyField(source='matched_tutor.id')
     matched_tutor_name = serializers.ReadOnlyField(source='matched_tutor.user.name')
-
-    VALID_UNIVERSITIES = ['FAU', 'UF', 'UCF']
 
     class Meta:
         model = SessionRequest
@@ -131,6 +246,7 @@ class SessionRequestSerializer(serializers.ModelSerializer):
             'student_name',
             'matched_tutor_id',
             'matched_tutor_name',
+            'course',
             'university',
             'course_prefix',
             'course_number',
@@ -153,18 +269,34 @@ class SessionRequestSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        university = data['university'].upper().strip()
-        course_prefix = data['course_prefix'].upper().strip()
-        course_number = data['course_number'].strip()
+        university = data.pop('university', None)
+        course_prefix = data.pop('course_prefix', None)
+        course_number = data.pop('course_number', None)
+        course = data.get('course')
 
-        if university not in self.VALID_UNIVERSITIES:
-            raise serializers.ValidationError({
-                "university": f"University must be one of: {', '.join(self.VALID_UNIVERSITIES)}"
-            })
+        legacy_fields = [university, course_prefix, course_number]
+        provided_legacy_fields = [value for value in legacy_fields if value not in (None, '')]
 
-        data['university'] = university
-        data['course_prefix'] = course_prefix
-        data['course_number'] = course_number
+        if course is None:
+            if len(provided_legacy_fields) != 3:
+                raise serializers.ValidationError({
+                    "course": "Provide course, or provide university, course_prefix, and course_number."
+                })
+
+            data['course'] = get_or_create_course(university, course_prefix, course_number)
+            return data
+
+        if provided_legacy_fields:
+            if len(provided_legacy_fields) != 3:
+                raise serializers.ValidationError({
+                    "course": "When course is provided, legacy course fields must be omitted or complete."
+                })
+
+            legacy_course = get_or_create_course(university, course_prefix, course_number)
+            if legacy_course.id != course.id:
+                raise serializers.ValidationError({
+                    "course": "Course does not match university, course_prefix, and course_number."
+                })
 
         return data
 

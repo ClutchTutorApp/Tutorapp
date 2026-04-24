@@ -1,6 +1,21 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, TutorProfile, SessionRequest, TutoringSession, Payment, Review
+from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
+
+
+@admin.register(University)
+class UniversityAdmin(admin.ModelAdmin):
+    list_display = ('id', 'code', 'name', 'created_at')
+    search_fields = ('code', 'name')
+    ordering = ('code',)
+
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ('id', 'course_key', 'university', 'prefix', 'number', 'created_at')
+    list_filter = ('university',)
+    search_fields = ('university__code', 'university__name', 'prefix', 'number')
+    ordering = ('university__code', 'prefix', 'number')
 
 
 @admin.register(User)
@@ -10,7 +25,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = ('id', 'email', 'name', 'role', 'university', 'is_staff', 'created_at')
     list_filter = ('role', 'is_staff', 'is_superuser', 'is_active')
     ordering = ('id',)
-    search_fields = ('email', 'name', 'university')
+    search_fields = ('email', 'name', 'university__code', 'university__name')
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
@@ -30,7 +45,15 @@ class UserAdmin(BaseUserAdmin):
 class TutorProfileAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'is_online', 'is_approved', 'rating', 'created_at')
     list_filter = ('is_online', 'is_approved')
-    search_fields = ('user__email', 'user__name', 'user__university')
+    search_fields = (
+        'user__email',
+        'user__name',
+        'user__university__code',
+        'user__university__name',
+        'courses_can_teach__prefix',
+        'courses_can_teach__number',
+    )
+    filter_horizontal = ('courses_can_teach',)
 
 
 @admin.register(SessionRequest)
@@ -39,14 +62,22 @@ class SessionRequestAdmin(admin.ModelAdmin):
         'id',
         'student',
         'matched_tutor',
+        'course',
         'course_key',
         'mode',
         'status',
         'proposed_price',
         'created_at',
     )
-    list_filter = ('status', 'mode', 'university')
-    search_fields = ('student__email', 'student__name', 'course_key')
+    list_filter = ('status', 'mode', 'course__university')
+    search_fields = (
+        'student__email',
+        'student__name',
+        'course__university__code',
+        'course__university__name',
+        'course__prefix',
+        'course__number',
+    )
 
 
 @admin.register(TutoringSession)
@@ -69,7 +100,9 @@ class TutoringSessionAdmin(admin.ModelAdmin):
         'student__name',
         'tutor__user__email',
         'tutor__user__name',
-        'request__course_key',
+        'request__course__university__code',
+        'request__course__prefix',
+        'request__course__number',
     )
 
 
