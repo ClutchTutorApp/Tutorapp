@@ -152,6 +152,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
 
 class TutorProfile(models.Model):
+    STATUS_CHOICES = (
+        ('offline', 'Offline'),
+        ('online', 'Online'),
+        ('busy', 'Busy'),
+        ('in_session', 'In_session'),
+    )
+
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
@@ -165,7 +172,8 @@ class TutorProfile(models.Model):
     general_topics = models.JSONField(default=list, blank=True)
     bio = models.TextField(blank=True)
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
-    is_online = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
+    last_active_at = models.DateTimeField(null=True, blank=True)
     payout_info_placeholder = models.CharField(max_length=255, blank=True, default='')
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

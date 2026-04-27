@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
+from django.utils import timezone
+from datetime import timedelta
 
 from .models import University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
 from .serializers import (
@@ -20,7 +22,10 @@ from .serializers import (
     CreatePaymentSerializer,
     ReviewSerializer,
     CreateReviewSerializer,
+    TutorStatusSerializer,
 )
+
+INACTIVITY_LIMIT = timedelta(minutes=10)
 
 
 class UniversityListView(generics.ListAPIView):
@@ -136,18 +141,22 @@ class SessionRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     def find_matching_tutor(self, session_request):
-        return (
+        cutoff = timezone.now() - INACTIVITY_LIMIT
+        queryset = (
             TutorProfile.objects
             .select_related('user')
             .filter(
                 courses_can_teach=session_request.course,
                 is_approved=True,
                 user__role='tutor',
+                status='online',
+                last_active_at__gte=cutoff,
             )
             .exclude(user=session_request.student)
-            .order_by('-is_online', '-rating', 'created_at')
-            .first()
+            .order_by('-rating', 'created_at')
         )
+
+        return queryset.first()
 
     def get(self, request):
         if request.user.role != 'student':
@@ -357,3 +366,39 @@ class ReviewDetailView(generics.RetrieveAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_url_kwarg = "review_id"
+
+class UpdateTutorStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(request_body=TutorStatusSerializer)
+    def post(self, request):
+        if request.user.role != 'tutor':
+            return Response(
+                {"error": "Only tutors can change status."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            tutor_profile = request.user.tutor_profile
+        except TutorProfile.DoesNotExist:
+            return Response(
+                {"error": "Tutor profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = TutorStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        tutor_profile.status = serializer.validated_data['status']
+        update_fields = ['status']
+
+        if tutor_profile.status == 'online':
+            tutor_profile.last_active_at = timezone.now()
+            update_fields.append('last_active_at')
+
+        tutor_profile.save(update_fields=update_fields)
+
+        return Response({
+            "status": tutor_profile.status,
+            "last_active_at": tutor_profile.last_active_at,
+        }, status=status.HTTP_200_OK)

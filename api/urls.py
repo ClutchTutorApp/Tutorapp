@@ -18,6 +18,7 @@ from .views import (
     ReviewListView,
     ReviewCreateView,
     ReviewDetailView,
+    UpdateTutorStatusView,
 )
 
 urlpatterns = [
@@ -39,4 +40,5 @@ urlpatterns = [
     path("reviews/", ReviewListView.as_view(), name="reviews-list"),
     path("reviews/create/", ReviewCreateView.as_view(), name="reviews-create"),
     path("reviews/<int:review_id>/", ReviewDetailView.as_view(), name="reviews-detail"),
+    path("tutor-profile/update-status/", UpdateTutorStatusView.as_view(), name="update_status"),
 ]

@@ -43,8 +43,8 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(TutorProfile)
 class TutorProfileAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'is_online', 'is_approved', 'rating', 'created_at')
-    list_filter = ('is_online', 'is_approved')
+    list_display = ('id', 'user', 'status', 'last_active_at', 'is_approved', 'rating', 'created_at')
+    list_filter = ('status', 'is_approved')
     search_fields = (
         'user__email',
         'user__name',

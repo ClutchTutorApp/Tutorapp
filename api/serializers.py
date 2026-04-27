@@ -198,7 +198,8 @@ class TutorProfileSerializer(serializers.ModelSerializer):
             'general_topics',
             'bio',
             'rating',
-            'is_online',
+            'status',
+            'last_active_at',
             'payout_info_placeholder',
             'is_approved',
             'created_at',
@@ -211,6 +212,8 @@ class TutorProfileSerializer(serializers.ModelSerializer):
             'email',
             'university',
             'rating',
+            'status',
+            'last_active_at',
             'is_approved',
             'created_at',
             'updated_at',
@@ -432,3 +435,7 @@ class CreateReviewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can only review a finished session.")
 
         return attrs
+
+
+class TutorStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=TutorProfile.STATUS_CHOICES)
