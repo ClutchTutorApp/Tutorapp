@@ -359,3 +359,40 @@ class Review(models.Model):
 
     def __str__(self):
         return f"Review #{self.id} - Session {self.session.id}"
+
+
+class SessionRequestOffer(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("accepted", "Accepted"),
+        ("declined", "Declined"),
+        ("expired", "Expired"),
+        ("cancelled", "Cancelled"),  # superseded by another tutor accepting or student cancelling
+    )
+
+    request = models.ForeignKey(
+        SessionRequest,
+        on_delete=models.CASCADE,
+        related_name="offers",
+    )
+    tutor = models.ForeignKey(
+        TutorProfile,
+        on_delete=models.CASCADE,
+        related_name="offers_received",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    offered_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["offered_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["request", "tutor"],
+                name="unique_offer_per_tutor_per_request",
+            )
+        ]
+
+    def __str__(self):
+        return f"Offer #{self.id} - {self.tutor.user.email} - {self.status}"
