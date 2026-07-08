@@ -377,3 +377,9 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/django,python,pycharm
+
+# Documentation
+docs/
+TASKS_MVP.md
+TASKS_POST_MVP.md
+MVP_TASKS.md
