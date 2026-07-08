@@ -3,6 +3,10 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.db.models import Avg
+import stripe
 
 class UserManager(BaseUserManager):
     def _resolve_university(self, university):
@@ -138,6 +142,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         on_delete=models.CASCADE,
         related_name='users'
     )
+    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
+    default_payment_method_id = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     is_active = models.BooleanField(default=True)
@@ -174,8 +180,8 @@ class TutorProfile(models.Model):
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
     last_active_at = models.DateTimeField(null=True, blank=True)
-    payout_info_placeholder = models.CharField(max_length=255, blank=True, default='')
     is_approved = models.BooleanField(default=False)
+    stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -275,6 +281,10 @@ class TutoringSession(models.Model):
     meeting_link = models.URLField(blank=True, default='')
     room_id = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
+    student_joined_at = models.DateTimeField(null=True, blank=True)
+    tutor_joined_at = models.DateTimeField(null=True, blank=True)
+    accumulated_seconds = models.PositiveIntegerField(default=0)
+    billing_resumed_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if self.start_time and self.end_time:
@@ -292,6 +302,7 @@ class Payment(models.Model):
         ("held", "Held"),
         ("released", "Released"),
         ("refunded", "Refunded"),
+        ("failed", "Failed"),
     ]
 
     session = models.OneToOneField(
@@ -312,6 +323,8 @@ class Payment(models.Model):
     hourly_rate = models.DecimalField(max_digits=8, decimal_places=2)
     total_amount = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, null=True)
+    platform_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def calculate_total(self):
@@ -360,6 +373,14 @@ class Review(models.Model):
     def __str__(self):
         return f"Review #{self.id} - Session {self.session.id}"
 
+@receiver(post_save, sender=Review)
+def update_tutor_rating(sender, instance, **kwargs):
+    tutor = instance.tutor
+    recent_ids = Review.objects.filter(tutor=tutor).order_by('-created_at').values_list('id', flat=True)[:100]
+    avg = Review.objects.filter(id__in=recent_ids).aggregate(Avg('rating'))['rating__avg']
+    tutor.rating = avg or Decimal("4.0")
+    tutor.save(update_fields=['rating'])
+
 
 class SessionRequestOffer(models.Model):
     STATUS_CHOICES = (
@@ -396,3 +417,70 @@ class SessionRequestOffer(models.Model):
 
     def __str__(self):
         return f"Offer #{self.id} - {self.tutor.user.email} - {self.status}"
+
+class SessionReport(models.Model):
+    REASON_CHOICES = (
+        ('tutor_no_show', 'Tutor did not show up'),
+        ('student_no_show', 'Student did not show up'),
+        ('poor_quality', 'Session quality was poor'),
+        ('technical_issue', 'Technical issues prevented the session'),
+        ('payment_dispute', 'Dispute over payment amount'),
+        ('other', 'Other'),
+    )
+
+    session = models.OneToOneField(TutoringSession, on_delete=models.CASCADE, related_name='report')
+    reported_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    reason = models.CharField(max_length=50, choices=REASON_CHOICES)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report #{self.id} - Session {self.session.id} - {self.reason}"
+
+
+@receiver(post_save, sender=TutoringSession)
+def auto_create_payment(sender, instance, created, **kwargs):
+    if instance.status != 'ended':
+        return
+    if Payment.objects.filter(session=instance).exists():
+        return
+
+    hourly_rate = float(instance.final_price or 0)
+    duration_hours = (instance.duration_minutes or 0) / 60
+    total_amount = round(hourly_rate * duration_hours, 2)
+
+    if total_amount <= 0:
+        return
+
+    platform_fee = round(total_amount * settings.PLATFORM_FEE_PERCENT, 2)
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(total_amount * 100),  # Stripe uses cents
+            currency='usd',
+            customer=instance.student.stripe_customer_id,
+            payment_method=instance.student.default_payment_method_id,
+            confirm=True,
+            off_session=True,
+            transfer_data={'destination': instance.tutor.stripe_account_id},
+            application_fee_amount=int(platform_fee * 100),
+        )
+        pay_status = 'held'
+        intent_id = intent.id
+
+    except stripe.error.CardError:
+        pay_status = 'failed'
+        intent_id = None
+
+    Payment.objects.create(
+        session=instance,
+        student=instance.student,
+        tutor=instance.tutor,
+        hourly_rate=instance.final_price,
+        total_amount=total_amount,
+        platform_fee=platform_fee,
+        stripe_payment_intent_id=intent_id,
+        status=pay_status,
+    )

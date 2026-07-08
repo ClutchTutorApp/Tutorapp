@@ -32,7 +32,12 @@ def _eligible_tutors(session_request):
             status="online",
             last_active_at__gte=cutoff,
         )
-        .exclude(user=session_request.student)
+        .exclude(
+            user=session_request.student
+        )
+        .exclude(
+            offers_received__status='pending'
+        )
     )
 
 

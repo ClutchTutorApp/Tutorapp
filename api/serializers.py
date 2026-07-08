@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
+from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review, SessionRequestOffer,SessionReport
 from django.contrib.auth import authenticate
 
 
@@ -162,6 +162,10 @@ class LoginSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     university = UniversityCodeField(slug_field='code', read_only=True)
+    has_payment_method = serializers.SerializerMethodField()
+
+    def get_has_payment_method(self, obj):
+        return bool(obj.default_payment_method_id)
 
     class Meta:
         model = User
@@ -172,6 +176,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'role',
             'university',
             'created_at',
+            'has_payment_method',
         ]
 
 
@@ -185,6 +190,11 @@ class TutorProfileSerializer(serializers.ModelSerializer):
         queryset=Course.objects.select_related('university').all(),
         required=False
     )
+
+    has_stripe_account = serializers.SerializerMethodField()
+
+    def get_has_stripe_account(self, obj):
+        return bool(obj.stripe_account_id)
 
     class Meta:
         model = TutorProfile
@@ -200,10 +210,10 @@ class TutorProfileSerializer(serializers.ModelSerializer):
             'rating',
             'status',
             'last_active_at',
-            'payout_info_placeholder',
             'is_approved',
             'created_at',
             'updated_at',
+            'has_stripe_account',
         ]
         read_only_fields = [
             'id',
@@ -344,32 +354,6 @@ class TutoringSessionSerializer(serializers.ModelSerializer):
         ]
 
 
-class CreateTutoringSessionSerializer(serializers.Serializer):
-    request_id = serializers.IntegerField()
-    meeting_link = serializers.URLField(required=False, allow_blank=True)
-    room_id = serializers.CharField(required=False, allow_blank=True)
-
-    def validate(self, attrs):
-        request_id = attrs.get('request_id')
-
-        try:
-            session_request = SessionRequest.objects.get(id=request_id)
-        except SessionRequest.DoesNotExist:
-            raise serializers.ValidationError({"request_id": "SessionRequest not found."})
-
-        if session_request.status != 'matched':
-            raise serializers.ValidationError({"request_id": "Only matched requests can become tutoring sessions."})
-
-        if session_request.matched_tutor is None:
-            raise serializers.ValidationError({"request_id": "This request does not have a matched tutor."})
-
-        if hasattr(session_request, 'tutoring_session'):
-            raise serializers.ValidationError({"request_id": "A tutoring session already exists for this request."})
-
-        attrs['session_request'] = session_request
-        return attrs
-
-
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
@@ -439,3 +423,34 @@ class CreateReviewSerializer(serializers.ModelSerializer):
 
 class TutorStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=TutorProfile.STATUS_CHOICES)
+
+class SessionRequestOfferSerializer(serializers.ModelSerializer):
+    course = serializers.CharField(source='request.course.course_key')
+    student_name = serializers.CharField(source='request.student.name')
+    description = serializers.CharField(source='request.description')
+    proposed_price = serializers.DecimalField(source='request.proposed_price', max_digits=8, decimal_places=2)
+
+    class Meta:
+        model = SessionRequestOffer
+        fields = ['id', 'course', 'student_name', 'description', 'proposed_price', 'status', 'offered_at', 'expires_at']
+
+
+class SessionReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SessionReport
+        fields = ['session', 'reason', 'description']
+
+    def validate(self, attrs):
+        session = attrs['session']
+        request = self.context['request']
+
+        if session.status not in ['active', 'ended', 'completed']:
+            raise serializers.ValidationError("You can only report an active or finished session.")
+
+        if request.user != session.student and not hasattr(request.user, 'tutor_profile'):
+            raise serializers.ValidationError("You are not a participant in this session.")
+
+        if hasattr(session, 'report'):
+            raise serializers.ValidationError("This session has already been reported.")
+
+        return attrs

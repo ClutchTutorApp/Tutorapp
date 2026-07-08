@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_framework',
     'django_filters',
+    'rest_framework_simplejwt.token_blacklist',
     'api',
     'drf_yasg',
 ]
@@ -144,7 +145,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
@@ -157,3 +158,7 @@ SWAGGER_SETTINGS = {
         }
     }
 }
+
+DAILY_API_KEY = os.getenv('DAILY_API_KEY')
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+PLATFORM_FEE_PERCENT = 0.10  # your 10% cut

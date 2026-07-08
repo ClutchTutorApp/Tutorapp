@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review
+from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review, SessionRequestOffer,SessionReport
 
 
 @admin.register(University)
@@ -151,3 +151,15 @@ class ReviewAdmin(admin.ModelAdmin):
         'tutor__user__name',
         'comment',
     )
+
+@admin.register(SessionRequestOffer)
+class SessionRequestOfferAdmin(admin.ModelAdmin):
+    list_display = ('id', 'request', 'tutor', 'status', 'offered_at', 'expires_at', 'responded_at')
+    list_filter = ('status',)
+    search_fields = ('tutor__user__email', 'request__student__email')
+
+@admin.register(SessionReport)
+class SessionReportAdmin(admin.ModelAdmin):
+    list_display = ('id', 'session', 'reported_by', 'reason', 'created_at')
+    list_filter = ('reason',)
+    search_fields = ('session__id', 'reported_by__email')
