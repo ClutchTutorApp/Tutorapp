@@ -13,7 +13,16 @@ from django.conf import settings
 from django.db import IntegrityError
 
 from .matching import advance_to_next_tutor
-from .models import University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review, SessionRequestOffer
+from .models import (
+    University,
+    Course,
+    TutorProfile,
+    SessionRequest,
+    TutoringSession,
+    Payment,
+    Review,
+    SessionRequestOffer,
+)
 from django.db.models import Q
 from .serializers import (
     RegisterSerializer,
@@ -46,23 +55,17 @@ class CourseListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = Course.objects.select_related('university').order_by(
-            'university__code',
-            'prefix',
-            'number'
+            'university__code', 'prefix', 'number'
         )
         university_code = self.request.query_params.get('university')
 
         if university_code:
-            queryset = queryset.filter(
-                university__code=University.normalize_code(university_code)
-            )
+            queryset = queryset.filter(university__code=University.normalize_code(university_code))
 
         search = self.request.query_params.get('search')
 
         if search:
-            queryset = queryset.filter(
-                Q(prefix__icontains=search) | Q(number__icontains=search)
-            )
+            queryset = queryset.filter(Q(prefix__icontains=search) | Q(number__icontains=search))
 
         return queryset
 
@@ -77,11 +80,8 @@ class RegisterView(generics.CreateAPIView):
         user = serializer.save()
 
         return Response(
-            {
-                "message": "User registered successfully",
-                "user": UserProfileSerializer(user).data
-            },
-            status=status.HTTP_201_CREATED
+            {"message": "User registered successfully", "user": UserProfileSerializer(user).data},
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -101,9 +101,9 @@ class LoginView(APIView):
                 "message": "Login successful",
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "user": UserProfileSerializer(user).data
+                "user": UserProfileSerializer(user).data,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
@@ -121,8 +121,7 @@ class LogoutView(APIView):
         refresh_token = request.data.get('refresh')
         if not refresh_token:
             return Response(
-                {"error": "Refresh token is required."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST
             )
         try:
             token = RefreshToken(refresh_token)
@@ -130,7 +129,7 @@ class LogoutView(APIView):
         except TokenError:
             return Response(
                 {"error": "Invalid or already blacklisted token."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
 
@@ -142,7 +141,7 @@ class TutorProfileView(APIView):
         if request.user.role != 'tutor':
             return Response(
                 {"error": "Only tutors can access tutor profile data."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         tutor_profile, created = TutorProfile.objects.get_or_create(user=request.user)
@@ -154,22 +153,19 @@ class TutorProfileView(APIView):
         if request.user.role != 'tutor':
             return Response(
                 {"error": "Only tutors can create or update tutor profiles."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         tutor_profile, created = TutorProfile.objects.get_or_create(user=request.user)
 
-        serializer = TutorProfileSerializer(
-            tutor_profile,
-            data=request.data,
-            partial=True
-        )
+        serializer = TutorProfileSerializer(tutor_profile, data=request.data, partial=True)
 
         if serializer.is_valid():
             serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class SessionRequestView(APIView):
     permission_classes = [IsAuthenticated]
@@ -178,10 +174,12 @@ class SessionRequestView(APIView):
         if request.user.role != 'student':
             return Response(
                 {"error": "Only students can view their session requests."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        session_requests = SessionRequest.objects.filter(student=request.user).order_by('-created_at')
+        session_requests = SessionRequest.objects.filter(student=request.user).order_by(
+            '-created_at'
+        )
         serializer = SessionRequestSerializer(session_requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -190,13 +188,12 @@ class SessionRequestView(APIView):
         if not request.user.default_payment_method_id:
             return Response(
                 {"error": "Add a payment method before requesting a tutor."},
-                status=status.HTTP_402_PAYMENT_REQUIRED
+                status=status.HTTP_402_PAYMENT_REQUIRED,
             )
 
         if request.user.role != 'student':
             return Response(
-                {"error": "Only students can request a tutor."},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "Only students can request a tutor."}, status=status.HTTP_403_FORBIDDEN
             )
 
         serializer = SessionRequestSerializer(data=request.data)
@@ -206,11 +203,11 @@ class SessionRequestView(APIView):
             advance_to_next_tutor(session_request)
 
             return Response(
-                SessionRequestSerializer(session_request).data,
-                status=status.HTTP_201_CREATED
+                SessionRequestSerializer(session_request).data, status=status.HTTP_201_CREATED
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class TutoringSessionListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -223,18 +220,15 @@ class TutoringSessionListView(APIView):
                 tutor_profile = request.user.tutor_profile
             except TutorProfile.DoesNotExist:
                 return Response(
-                    {"error": "Tutor profile not found."},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "Tutor profile not found."}, status=status.HTTP_404_NOT_FOUND
                 )
             sessions = TutoringSession.objects.filter(tutor=tutor_profile).order_by('-created_at')
         else:
-            return Response(
-                {"error": "Invalid user role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"error": "Invalid user role."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = TutoringSessionSerializer(sessions, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class TutoringSessionDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -286,7 +280,7 @@ class TutoringSessionDetailView(APIView):
             if new_status not in allowed:
                 return Response(
                     {"error": f"Cannot transition from '{session.status}' to '{new_status}'."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         serializer = TutoringSessionSerializer(session, data=request.data, partial=True)
@@ -295,6 +289,7 @@ class TutoringSessionDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class PaymentListView(generics.ListAPIView):
     serializer_class = PaymentSerializer
@@ -338,6 +333,7 @@ class ReviewListView(generics.ListAPIView):
         user = self.request.user
         return Review.objects.filter(student=user) | Review.objects.filter(tutor__user=user)
 
+
 class ReviewCreateView(generics.CreateAPIView):
     queryset = Review.objects.all()
     serializer_class = CreateReviewSerializer
@@ -354,14 +350,16 @@ class ReviewCreateView(generics.CreateAPIView):
         except IntegrityError:
             return Response(
                 {"error": "You have already reviewed this session."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
 
 class ReviewDetailView(generics.RetrieveAPIView):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_url_kwarg = "review_id"
+
 
 class UpdateTutorStatusView(APIView):
     permission_classes = [IsAuthenticated]
@@ -370,17 +368,13 @@ class UpdateTutorStatusView(APIView):
     def post(self, request):
         if request.user.role != 'tutor':
             return Response(
-                {"error": "Only tutors can change status."},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "Only tutors can change status."}, status=status.HTTP_403_FORBIDDEN
             )
 
         try:
             tutor_profile = request.user.tutor_profile
         except TutorProfile.DoesNotExist:
-            return Response(
-                {"error": "Tutor profile not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Tutor profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = TutorStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -388,7 +382,7 @@ class UpdateTutorStatusView(APIView):
         if serializer.validated_data['status'] == 'online' and not tutor_profile.stripe_account_id:
             return Response(
                 {"error": "Connect a payout account before going online."},
-                status=status.HTTP_402_PAYMENT_REQUIRED
+                status=status.HTTP_402_PAYMENT_REQUIRED,
             )
 
         tutor_profile.status = serializer.validated_data['status']
@@ -400,10 +394,13 @@ class UpdateTutorStatusView(APIView):
 
         tutor_profile.save(update_fields=update_fields)
 
-        return Response({
-            "status": tutor_profile.status,
-            "last_active_at": tutor_profile.last_active_at,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "status": tutor_profile.status,
+                "last_active_at": tutor_profile.last_active_at,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ApproveTutorView(APIView):
@@ -427,13 +424,21 @@ class CancelSessionRequestView(APIView):
         try:
             session_request = SessionRequest.objects.get(id=request_id)
         except SessionRequest.DoesNotExist:
-            return Response({"error": "Session request not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Session request not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if session_request.student != request.user:
-            return Response({"error": "You can only cancel your own requests."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "You can only cancel your own requests."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if session_request.status not in ['searching', 'matched']:
-            return Response({"error": "Only active requests can be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Only active requests can be cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         session_request.status = 'cancelled'
         session_request.save(update_fields=['status'])
@@ -446,7 +451,9 @@ class TutorOfferListView(APIView):
 
     def get(self, request):
         if request.user.role != 'tutor':
-            return Response({"error": "Only tutors can view offers."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Only tutors can view offers."}, status=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             tutor_profile = request.user.tutor_profile
@@ -454,13 +461,11 @@ class TutorOfferListView(APIView):
             return Response({"error": "Tutor profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
         offers = SessionRequestOffer.objects.filter(
-            tutor=tutor_profile,
-            status='pending'
+            tutor=tutor_profile, status='pending'
         ).select_related('request__course', 'request__student')
 
         serializer = SessionRequestOfferSerializer(offers, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 
 class AcceptOfferView(APIView):
@@ -468,7 +473,9 @@ class AcceptOfferView(APIView):
 
     def post(self, request, offer_id):
         if request.user.role != 'tutor':
-            return Response({"error": "Only tutors can accept offers."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Only tutors can accept offers."}, status=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             tutor_profile = request.user.tutor_profile
@@ -478,25 +485,28 @@ class AcceptOfferView(APIView):
         with transaction.atomic():
             try:
                 offer = SessionRequestOffer.objects.select_for_update().get(
-                    id=offer_id,
-                    tutor=tutor_profile,
-                    status='pending'
+                    id=offer_id, tutor=tutor_profile, status='pending'
                 )
             except SessionRequestOffer.DoesNotExist:
-                return Response({"error": "Offer not found or already responded to."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Offer not found or already responded to."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
             session_request = offer.request
             if session_request.status != 'searching':
-                return Response({"error": "This request is no longer available."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "This request is no longer available."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             offer.status = 'accepted'
             offer.responded_at = timezone.now()
             offer.save(update_fields=['status', 'responded_at'])
 
-            SessionRequestOffer.objects.filter(
-                request=session_request,
-                status='pending'
-            ).exclude(id=offer.id).update(status='cancelled', responded_at=timezone.now())
+            SessionRequestOffer.objects.filter(request=session_request, status='pending').exclude(
+                id=offer.id
+            ).update(status='cancelled', responded_at=timezone.now())
 
             session_request.status = 'matched'
             session_request.matched_tutor = tutor_profile
@@ -526,7 +536,9 @@ class DeclineOfferView(APIView):
 
     def post(self, request, offer_id):
         if request.user.role != 'tutor':
-            return Response({"error": "Only tutors can decline offers."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Only tutors can decline offers."}, status=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             tutor_profile = request.user.tutor_profile
@@ -535,12 +547,13 @@ class DeclineOfferView(APIView):
 
         try:
             offer = SessionRequestOffer.objects.get(
-                id=offer_id,
-                tutor=tutor_profile,
-                status='pending'
+                id=offer_id, tutor=tutor_profile, status='pending'
             )
         except SessionRequestOffer.DoesNotExist:
-            return Response({"error": "Offer not found or already responded to."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Offer not found or already responded to."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         offer.status = 'declined'
         offer.responded_at = timezone.now()
@@ -550,6 +563,7 @@ class DeclineOfferView(APIView):
         advance_to_next_tutor(offer.request)
 
         return Response({"message": "Offer declined."}, status=status.HTTP_200_OK)
+
 
 class DisputeSessionView(APIView):
     permission_classes = [IsAuthenticated]
@@ -564,16 +578,24 @@ class DisputeSessionView(APIView):
             try:
                 tutor_profile = request.user.tutor_profile
                 if session.tutor != tutor_profile:
-                    return Response({"error": "You are not a participant in this session."}, status=status.HTTP_403_FORBIDDEN)
+                    return Response(
+                        {"error": "You are not a participant in this session."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
             except TutorProfile.DoesNotExist:
-                return Response({"error": "You are not a participant in this session."}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"error": "You are not a participant in this session."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = SessionReportSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(session=session, reported_by=request.user)
             session.status = 'disputed'
             session.save(update_fields=['status'])
-            return Response({"message": "Session disputed successfully."}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "Session disputed successfully."}, status=status.HTTP_201_CREATED
+            )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -591,7 +613,9 @@ class GetMeetingTokenView(APIView):
             try:
                 tutor_profile = request.user.tutor_profile
                 if session.tutor != tutor_profile:
-                    return Response({"error": "Not a participant."}, status=status.HTTP_403_FORBIDDEN)
+                    return Response(
+                        {"error": "Not a participant."}, status=status.HTTP_403_FORBIDDEN
+                    )
                 is_owner = True
             except TutorProfile.DoesNotExist:
                 return Response({"error": "Not a participant."}, status=status.HTTP_403_FORBIDDEN)
@@ -599,7 +623,9 @@ class GetMeetingTokenView(APIView):
             is_owner = False
 
         if not session.room_id:
-            return Response({"error": "No room created for this session."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No room created for this session."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         token_response = create_meeting_token(
             room_name=session.room_id,
@@ -607,10 +633,13 @@ class GetMeetingTokenView(APIView):
             is_owner=is_owner,
         )
 
-        return Response({
-            "token": token_response['token'],
-            "room_url": session.meeting_link,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "token": token_response['token'],
+                "room_url": session.meeting_link,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class DailyWebhookView(APIView):
@@ -628,7 +657,7 @@ class DailyWebhookView(APIView):
         try:
             session_id = int(room_name.replace('clutch-session-', ''))
             session = TutoringSession.objects.get(id=session_id)
-        except (ValueError, TutoringSession.DoesNotExist):
+        except ValueError, TutoringSession.DoesNotExist:
             return Response(status=status.HTTP_200_OK)
 
         participant = payload.get('participant', {})
@@ -646,7 +675,11 @@ class DailyWebhookView(APIView):
                 update_fields.append('student_joined_at')
 
             # Both present — start or resume billing
-            if session.student_joined_at and session.tutor_joined_at and not session.billing_resumed_at:
+            if (
+                session.student_joined_at
+                and session.tutor_joined_at
+                and not session.billing_resumed_at
+            ):
                 session.billing_resumed_at = now
                 update_fields.append('billing_resumed_at')
                 if not session.start_time:
@@ -663,7 +696,12 @@ class DailyWebhookView(APIView):
                 session.save(update_fields=['accumulated_seconds', 'billing_resumed_at'])
 
         elif event_type == 'meeting-ended':
-            update_fields = ['end_time', 'duration_minutes', 'accumulated_seconds', 'billing_resumed_at']
+            update_fields = [
+                'end_time',
+                'duration_minutes',
+                'accumulated_seconds',
+                'billing_resumed_at',
+            ]
             if session.billing_resumed_at:
                 elapsed = (now - session.billing_resumed_at).total_seconds()
                 session.accumulated_seconds += int(elapsed)
@@ -703,14 +741,17 @@ class SessionCostView(APIView):
         hourly_rate = float(session.final_price or 0)
         current_cost = round((elapsed / 3600) * hourly_rate, 2)
 
-        return Response({
-            "elapsed_seconds": elapsed,
-            "is_billing_active": is_billing_active,
-            "hourly_rate": str(session.final_price),
-            "current_cost": f"{current_cost:.2f}",
-            "student_joined": session.student_joined_at is not None,
-            "tutor_joined": session.tutor_joined_at is not None,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "elapsed_seconds": elapsed,
+                "is_billing_active": is_billing_active,
+                "hourly_rate": str(session.final_price),
+                "current_cost": f"{current_cost:.2f}",
+                "student_joined": session.student_joined_at is not None,
+                "tutor_joined": session.tutor_joined_at is not None,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CreateSetupIntentView(APIView):
@@ -718,7 +759,9 @@ class CreateSetupIntentView(APIView):
 
     def post(self, request):
         if request.user.role != 'student':
-            return Response({"error": "Only students need payment methods."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Only students need payment methods."}, status=status.HTTP_403_FORBIDDEN
+            )
 
         stripe.api_key = settings.STRIPE_SECRET_KEY
         user = request.user
@@ -745,7 +788,9 @@ class SavePaymentMethodView(APIView):
     def post(self, request):
         payment_method_id = request.data.get('payment_method_id')
         if not payment_method_id:
-            return Response({"error": "payment_method_id required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "payment_method_id required."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         stripe.api_key = settings.STRIPE_SECRET_KEY
         user = request.user
@@ -761,12 +806,16 @@ class SavePaymentMethodView(APIView):
 
         return Response({"message": "Payment method saved."}, status=status.HTTP_200_OK)
 
+
 class TutorConnectView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if request.user.role != 'tutor':
-            return Response({"error": "Only tutors can connect a payout account."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Only tutors can connect a payout account."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             tutor_profile = request.user.tutor_profile
@@ -795,6 +844,7 @@ class TutorConnectView(APIView):
 
         return Response({"onboarding_url": link.url}, status=status.HTTP_200_OK)
 
+
 class SessionRequestDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -802,10 +852,15 @@ class SessionRequestDetailView(APIView):
         try:
             session_request = SessionRequest.objects.get(id=request_id)
         except SessionRequest.DoesNotExist:
-            return Response({"error": "Session request not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Session request not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if session_request.student != request.user:
-            return Response({"error": "You can only view your own session requests."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "You can only view your own session requests."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = SessionRequestSerializer(session_request)
         return Response(serializer.data, status=status.HTTP_200_OK)

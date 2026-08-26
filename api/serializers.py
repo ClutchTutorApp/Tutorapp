@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review, SessionRequestOffer,SessionReport
+from .models import (
+    User,
+    University,
+    Course,
+    TutorProfile,
+    SessionRequest,
+    TutoringSession,
+    Payment,
+    Review,
+    SessionRequestOffer,
+    SessionReport,
+)
 from django.contrib.auth import authenticate
 
 
@@ -41,10 +52,14 @@ def get_or_create_course(university_code, prefix, number):
         raise serializers.ValidationError("Course prefix and number are required.")
 
     if len(prefix) > 10:
-        raise serializers.ValidationError({"course_prefix": "Course prefix must be 10 characters or fewer."})
+        raise serializers.ValidationError(
+            {"course_prefix": "Course prefix must be 10 characters or fewer."}
+        )
 
     if len(number) > 10:
-        raise serializers.ValidationError({"course_number": "Course number must be 10 characters or fewer."})
+        raise serializers.ValidationError(
+            {"course_number": "Course number must be 10 characters or fewer."}
+        )
 
     try:
         university = University.objects.get(code=code)
@@ -120,7 +135,16 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'role', 'university', 'password', 'password_confirm', 'created_at']
+        fields = [
+            'id',
+            'email',
+            'name',
+            'role',
+            'university',
+            'password',
+            'password_confirm',
+            'created_at',
+        ]
         read_only_fields = ['id', 'created_at']
 
     def validate(self, attrs):
@@ -136,7 +160,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             name=validated_data['name'],
             role=validated_data['role'],
             university=validated_data['university'],
-            password=validated_data['password']
+            password=validated_data['password'],
         )
         return user
 
@@ -159,6 +183,7 @@ class LoginSerializer(serializers.Serializer):
 
         attrs['user'] = user
         return attrs
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     university = UniversityCodeField(slug_field='code', read_only=True)
@@ -186,9 +211,7 @@ class TutorProfileSerializer(serializers.ModelSerializer):
     email = serializers.ReadOnlyField(source='user.email')
     university = UniversityCodeField(source='user.university', slug_field='code', read_only=True)
     courses_can_teach = CourseReferenceField(
-        many=True,
-        queryset=Course.objects.select_related('university').all(),
-        required=False
+        many=True, queryset=Course.objects.select_related('university').all(), required=False
     )
 
     has_stripe_account = serializers.SerializerMethodField()
@@ -237,12 +260,12 @@ class TutorProfileSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Each topic must be a string.")
         return value
 
+
 class SessionRequestSerializer(serializers.ModelSerializer):
     student_id = serializers.ReadOnlyField(source='student.id')
     student_name = serializers.ReadOnlyField(source='student.name')
     course = CourseReferenceField(
-        queryset=Course.objects.select_related('university').all(),
-        required=False
+        queryset=Course.objects.select_related('university').all(), required=False
     )
     university = serializers.CharField(required=False)
     course_prefix = serializers.CharField(required=False)
@@ -292,26 +315,33 @@ class SessionRequestSerializer(serializers.ModelSerializer):
 
         if course is None:
             if len(provided_legacy_fields) != 3:
-                raise serializers.ValidationError({
-                    "course": "Provide course, or provide university, course_prefix, and course_number."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "course": "Provide course, or provide university, course_prefix, and course_number."
+                    }
+                )
 
             data['course'] = get_or_create_course(university, course_prefix, course_number)
             return data
 
         if provided_legacy_fields:
             if len(provided_legacy_fields) != 3:
-                raise serializers.ValidationError({
-                    "course": "When course is provided, legacy course fields must be omitted or complete."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "course": "When course is provided, legacy course fields must be omitted or complete."
+                    }
+                )
 
             legacy_course = get_or_create_course(university, course_prefix, course_number)
             if legacy_course.id != course.id:
-                raise serializers.ValidationError({
-                    "course": "Course does not match university, course_prefix, and course_number."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "course": "Course does not match university, course_prefix, and course_number."
+                    }
+                )
 
         return data
+
 
 class TutoringSessionSerializer(serializers.ModelSerializer):
     request_id = serializers.ReadOnlyField(source='request.id')
@@ -382,9 +412,12 @@ class CreatePaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This session already has a payment.")
 
         if not session.duration_minutes:
-            raise serializers.ValidationError("Session duration must be set before creating payment.")
+            raise serializers.ValidationError(
+                "Session duration must be set before creating payment."
+            )
 
         return attrs
+
 
 class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
@@ -399,6 +432,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["student", "tutor", "created_at"]
+
 
 class CreateReviewSerializer(serializers.ModelSerializer):
     class Meta:
@@ -424,15 +458,27 @@ class CreateReviewSerializer(serializers.ModelSerializer):
 class TutorStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=TutorProfile.STATUS_CHOICES)
 
+
 class SessionRequestOfferSerializer(serializers.ModelSerializer):
     course = serializers.CharField(source='request.course.course_key')
     student_name = serializers.CharField(source='request.student.name')
     description = serializers.CharField(source='request.description')
-    proposed_price = serializers.DecimalField(source='request.proposed_price', max_digits=8, decimal_places=2)
+    proposed_price = serializers.DecimalField(
+        source='request.proposed_price', max_digits=8, decimal_places=2
+    )
 
     class Meta:
         model = SessionRequestOffer
-        fields = ['id', 'course', 'student_name', 'description', 'proposed_price', 'status', 'offered_at', 'expires_at']
+        fields = [
+            'id',
+            'course',
+            'student_name',
+            'description',
+            'proposed_price',
+            'status',
+            'offered_at',
+            'expires_at',
+        ]
 
 
 class SessionReportSerializer(serializers.ModelSerializer):

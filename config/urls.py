@@ -14,6 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path, include
 
@@ -31,11 +32,7 @@ schema_view = get_schema_view(
 )
 
 schema_view.security_definitions = {
-    'Bearer': {
-        'type': 'apiKey',
-        'name': 'Authorization',
-        'in': 'header'
-    }
+    'Bearer': {'type': 'apiKey', 'name': 'Authorization', 'in': 'header'}
 }
 
 urlpatterns = [
@@ -44,4 +41,3 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0)),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0)),
 ]
-
