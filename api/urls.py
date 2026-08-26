@@ -45,7 +45,11 @@ urlpatterns = [
     path('tutor-profile/', TutorProfileView.as_view(), name='tutor_profile'),
     path('session-requests/', SessionRequestView.as_view(), name='session_requests'),
     path('sessions/', TutoringSessionListView.as_view(), name='tutoring_sessions'),
-    path('sessions/<int:session_id>/', TutoringSessionDetailView.as_view(), name='tutoring_session_detail'),
+    path(
+        'sessions/<int:session_id>/',
+        TutoringSessionDetailView.as_view(),
+        name='tutoring_session_detail',
+    ),
     path("payments/", PaymentListView.as_view(), name="payments-list"),
     path("payments/create/", PaymentCreateView.as_view(), name="payments-create"),
     path("payments/<int:payment_id>/", PaymentDetailView.as_view(), name="payments-detail"),
@@ -55,16 +59,28 @@ urlpatterns = [
     path("reviews/<int:review_id>/", ReviewDetailView.as_view(), name="reviews-detail"),
     path("tutor-profile/update-status/", UpdateTutorStatusView.as_view(), name="update_status"),
     path('admin/tutors/<int:tutor_id>/approve/', ApproveTutorView.as_view(), name='approve_tutor'),
-    path('session-requests/<int:request_id>/cancel/', CancelSessionRequestView.as_view(), name='cancel_session_request'),
-    path('session-requests/<int:request_id>/', SessionRequestDetailView.as_view(), name='session_request_detail'),
+    path(
+        'session-requests/<int:request_id>/cancel/',
+        CancelSessionRequestView.as_view(),
+        name='cancel_session_request',
+    ),
+    path(
+        'session-requests/<int:request_id>/',
+        SessionRequestDetailView.as_view(),
+        name='session_request_detail',
+    ),
     path('offers/', TutorOfferListView.as_view(), name='offer_list'),
     path('offers/<int:offer_id>/accept/', AcceptOfferView.as_view(), name='accept_offer'),
     path('offers/<int:offer_id>/decline/', DeclineOfferView.as_view(), name='decline_offer'),
-    path('sessions/<int:session_id>/dispute/', DisputeSessionView.as_view(), name='dispute_session'),
+    path(
+        'sessions/<int:session_id>/dispute/', DisputeSessionView.as_view(), name='dispute_session'
+    ),
     path('sessions/<int:session_id>/token/', GetMeetingTokenView.as_view(), name='meeting_token'),
     path('webhooks/daily/', DailyWebhookView.as_view(), name='daily_webhook'),
     path('sessions/<int:session_id>/cost/', SessionCostView.as_view(), name='session_cost'),
     path('payments/setup-intent/', CreateSetupIntentView.as_view(), name='setup_intent'),
-    path('payments/save-payment-method/', SavePaymentMethodView.as_view(), name='save_payment_method'),
+    path(
+        'payments/save-payment-method/', SavePaymentMethodView.as_view(), name='save_payment_method'
+    ),
     path('tutor/connect/', TutorConnectView.as_view(), name='tutor_connect'),
 ]

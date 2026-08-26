@@ -8,6 +8,7 @@ from django.dispatch import receiver
 from django.db.models import Avg
 import stripe
 
+
 class UserManager(BaseUserManager):
     def _resolve_university(self, university):
         if isinstance(university, University):
@@ -37,19 +38,21 @@ class UserManager(BaseUserManager):
         email = self.normalize_email(email)
         university = self._resolve_university(university)
 
-        user = self.model(
-            email=email,
-            name=name,
-            role=role,
-            university=university,
-            **extra_fields
-        )
+        user = self.model(email=email, name=name, role=role, university=university, **extra_fields)
 
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, name, role='student', university='Admin University', password=None, **extra_fields):
+    def create_superuser(
+        self,
+        email,
+        name,
+        role='student',
+        university='Admin University',
+        password=None,
+        **extra_fields,
+    ):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
@@ -60,7 +63,7 @@ class UserManager(BaseUserManager):
             role=role,
             university=university,
             password=password,
-            **extra_fields
+            **extra_fields,
         )
 
 
@@ -98,21 +101,16 @@ class University(models.Model):
 
 
 class Course(models.Model):
-    university = models.ForeignKey(
-        University,
-        on_delete=models.CASCADE,
-        related_name='courses'
-    )
-    prefix = models.CharField(max_length=10)   # COP
-    number = models.CharField(max_length=10)   # 4655
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='courses')
+    prefix = models.CharField(max_length=10)  # COP
+    number = models.CharField(max_length=10)  # 4655
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['university__code', 'prefix', 'number']
         constraints = [
             models.UniqueConstraint(
-                fields=['university', 'prefix', 'number'],
-                name='unique_course_per_university'
+                fields=['university', 'prefix', 'number'], name='unique_course_per_university'
             )
         ]
 
@@ -128,6 +126,7 @@ class Course(models.Model):
     def __str__(self):
         return self.course_key
 
+
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ('student', 'Student'),
@@ -137,11 +136,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=255)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    university = models.ForeignKey(
-        University,
-        on_delete=models.CASCADE,
-        related_name='users'
-    )
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='users')
     stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
     default_payment_method_id = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -157,6 +152,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
+
 class TutorProfile(models.Model):
     STATUS_CHOICES = (
         ('offline', 'Offline'),
@@ -165,16 +161,8 @@ class TutorProfile(models.Model):
         ('in_session', 'In_session'),
     )
 
-    user = models.OneToOneField(
-        User,
-        on_delete=models.CASCADE,
-        related_name='tutor_profile'
-    )
-    courses_can_teach = models.ManyToManyField(
-        Course,
-        blank=True,
-        related_name='tutor_profiles'
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='tutor_profile')
+    courses_can_teach = models.ManyToManyField(Course, blank=True, related_name='tutor_profiles')
     general_topics = models.JSONField(default=list, blank=True)
     bio = models.TextField(blank=True)
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
@@ -193,6 +181,7 @@ class TutorProfile(models.Model):
     def __str__(self):
         return f"TutorProfile - {self.user.email}"
 
+
 class SessionRequest(models.Model):
     STATUS_CHOICES = (
         ('searching', 'Searching'),
@@ -206,23 +195,15 @@ class SessionRequest(models.Model):
         ('in_person', 'In Person'),
     )
 
-    student = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='session_requests'
-    )
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='session_requests')
     matched_tutor = models.ForeignKey(
         TutorProfile,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='matched_session_requests'
+        related_name='matched_session_requests',
     )
-    course = models.ForeignKey(
-        Course,
-        on_delete=models.CASCADE,
-        related_name='session_requests'
-    )
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='session_requests')
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default="remote")
     description = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='searching')
@@ -248,6 +229,7 @@ class SessionRequest(models.Model):
     def __str__(self):
         return f"{self.student.email} - {self.course_key} - {self.status}"
 
+
 class TutoringSession(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
@@ -258,19 +240,13 @@ class TutoringSession(models.Model):
     )
 
     request = models.OneToOneField(
-        SessionRequest,
-        on_delete=models.CASCADE,
-        related_name='tutoring_session'
+        SessionRequest, on_delete=models.CASCADE, related_name='tutoring_session'
     )
     student = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='student_tutoring_sessions'
+        User, on_delete=models.CASCADE, related_name='student_tutoring_sessions'
     )
     tutor = models.ForeignKey(
-        TutorProfile,
-        on_delete=models.CASCADE,
-        related_name='tutor_tutoring_sessions'
+        TutorProfile, on_delete=models.CASCADE, related_name='tutor_tutoring_sessions'
     )
     mode = models.CharField(max_length=20, choices=SessionRequest.MODE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -306,19 +282,13 @@ class Payment(models.Model):
     ]
 
     session = models.OneToOneField(
-        "TutoringSession",
-        on_delete=models.CASCADE,
-        related_name="payment"
+        "TutoringSession", on_delete=models.CASCADE, related_name="payment"
     )
     student = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="payments_made"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments_made"
     )
     tutor = models.ForeignKey(
-        "TutorProfile",
-        on_delete=models.CASCADE,
-        related_name="payments_received"
+        "TutorProfile", on_delete=models.CASCADE, related_name="payments_received"
     )
     hourly_rate = models.DecimalField(max_digits=8, decimal_places=2)
     total_amount = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
@@ -345,23 +315,15 @@ class Payment(models.Model):
 
 class Review(models.Model):
     session = models.OneToOneField(
-        "TutoringSession",
-        on_delete=models.CASCADE,
-        related_name="review"
+        "TutoringSession", on_delete=models.CASCADE, related_name="review"
     )
     student = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="reviews_given"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews_given"
     )
     tutor = models.ForeignKey(
-        "TutorProfile",
-        on_delete=models.CASCADE,
-        related_name="reviews_received"
+        "TutorProfile", on_delete=models.CASCADE, related_name="reviews_received"
     )
-    rating = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)]
-    )
+    rating = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -373,10 +335,15 @@ class Review(models.Model):
     def __str__(self):
         return f"Review #{self.id} - Session {self.session.id}"
 
+
 @receiver(post_save, sender=Review)
 def update_tutor_rating(sender, instance, **kwargs):
     tutor = instance.tutor
-    recent_ids = Review.objects.filter(tutor=tutor).order_by('-created_at').values_list('id', flat=True)[:100]
+    recent_ids = (
+        Review.objects.filter(tutor=tutor)
+        .order_by('-created_at')
+        .values_list('id', flat=True)[:100]
+    )
     avg = Review.objects.filter(id__in=recent_ids).aggregate(Avg('rating'))['rating__avg']
     tutor.rating = avg or Decimal("4.0")
     tutor.save(update_fields=['rating'])
@@ -417,6 +384,7 @@ class SessionRequestOffer(models.Model):
 
     def __str__(self):
         return f"Offer #{self.id} - {self.tutor.user.email} - {self.status}"
+
 
 class SessionReport(models.Model):
     REASON_CHOICES = (

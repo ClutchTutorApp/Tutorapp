@@ -3,6 +3,7 @@ from django.conf import settings
 
 DAILY_API_URL = "https://api.daily.co/v1"
 
+
 def create_room(session_id):
     response = requests.post(
         f"{DAILY_API_URL}/rooms",
@@ -17,8 +18,8 @@ def create_room(session_id):
                 "max_participants": 2,
                 "enable_screenshare": True,
                 "exp": None,
-            }
-        }
+            },
+        },
     )
     response.raise_for_status()
     return response.json()
@@ -29,7 +30,7 @@ def delete_room(room_name):
         f"{DAILY_API_URL}/rooms/{room_name}",
         headers={
             "Authorization": f"Bearer {settings.DAILY_API_KEY}",
-        }
+        },
     )
     response.raise_for_status()
     return response.json()
@@ -49,7 +50,7 @@ def create_meeting_token(room_name, user_name, is_owner=False):
                 "is_owner": is_owner,
                 "enable_screenshare": True,
             }
-        }
+        },
     )
     response.raise_for_status()
     return response.json()

@@ -23,8 +23,7 @@ def _bayesian_score(rating, review_count):
 def _eligible_tutors(session_request):
     cutoff = timezone.now() - INACTIVITY_LIMIT
     return (
-        TutorProfile.objects
-        .annotate(review_count=Count("reviews_received"))
+        TutorProfile.objects.annotate(review_count=Count("reviews_received"))
         .filter(
             courses_can_teach=session_request.course,
             is_approved=True,
@@ -32,12 +31,8 @@ def _eligible_tutors(session_request):
             status="online",
             last_active_at__gte=cutoff,
         )
-        .exclude(
-            user=session_request.student
-        )
-        .exclude(
-            offers_received__status='pending'
-        )
+        .exclude(user=session_request.student)
+        .exclude(offers_received__status='pending')
     )
 
 

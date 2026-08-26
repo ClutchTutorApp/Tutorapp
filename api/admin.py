@@ -1,6 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, University, Course, TutorProfile, SessionRequest, TutoringSession, Payment, Review, SessionRequestOffer,SessionReport
+from .models import (
+    User,
+    University,
+    Course,
+    TutorProfile,
+    SessionRequest,
+    TutoringSession,
+    Payment,
+    Review,
+    SessionRequestOffer,
+    SessionReport,
+)
 
 
 @admin.register(University)
@@ -30,14 +41,29 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal Info', {'fields': ('name', 'role', 'university')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        (
+            'Permissions',
+            {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')},
+        ),
     )
 
     add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('email', 'name', 'role', 'university', 'password1', 'password2', 'is_staff', 'is_superuser'),
-        }),
+        (
+            None,
+            {
+                'classes': ('wide',),
+                'fields': (
+                    'email',
+                    'name',
+                    'role',
+                    'university',
+                    'password1',
+                    'password2',
+                    'is_staff',
+                    'is_superuser',
+                ),
+            },
+        ),
     )
 
 
@@ -133,6 +159,7 @@ class PaymentAdmin(admin.ModelAdmin):
         'session__id',
     )
 
+
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = (
@@ -152,11 +179,13 @@ class ReviewAdmin(admin.ModelAdmin):
         'comment',
     )
 
+
 @admin.register(SessionRequestOffer)
 class SessionRequestOfferAdmin(admin.ModelAdmin):
     list_display = ('id', 'request', 'tutor', 'status', 'offered_at', 'expires_at', 'responded_at')
     list_filter = ('status',)
     search_fields = ('tutor__user__email', 'request__student__email')
+
 
 @admin.register(SessionReport)
 class SessionReportAdmin(admin.ModelAdmin):
